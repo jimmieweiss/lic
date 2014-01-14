@@ -142,6 +142,5 @@ if __name__ == "__main__":
 								help="Output file for duplication marked reads. Required.")
     
 	arg_vars = vars(parser.parse_args())
-	# It's my namespace and I'll clobber it if I want to
 	locals().update(arg_vars)
 	main(input_file, output_file)
