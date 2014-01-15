@@ -4,6 +4,7 @@ Reads an aligned SAM file and groups reads by position and then by molecular tag
 Input is aligned SAM file, output is aligned SAM file.
 """
 
+## alphabetize -- stylistic but helpful
 import argparse
 import csv
 import locale
