@@ -12,28 +12,73 @@ import numpy as np
 import matplotlib.pyplot as plt
 import pylab
 import csv
+import argparse
 
 #
 #   python miRProbeDesign.py probes MIRFILE 
 #
-#	skriver ut seed (forsta baserna med perfekt matchning) antal miR som fangas    antal prober som behovs for att fanga dem
+#	skriver ut seed (forsta baserna med perfekt matchning) antal miR som fangas antal prober som behovs for att fanga dem
 
-class Arguments:
-	def __init__(self):
-		self.command = sys.argv[1]
-		self.in_handle = sys.argv[2]
-		#self.in_handle = open(sys.argv[2], "rU")
-		#self.out_handle = open(sys.argv[3], "w")
+def main(input_file, output_file, perfect_matches, start_base, mismatches, end_base, number_targets, mode):
+	
+	if arg_vars['mode'] == True:
+		print 'new mode'
+		target_design(input_file, output_file, perfect_matches, start_base, mismatches, end_base, number_targets)
+	
+	elif arg_vars['perfect_matches']:
+		probedesign(input_file, output_file, perfect_matches, start_base, mismatches, end_base, number_targets)
+		#raise SyntaxError("Must indicate index length to tally.")
+		#raise SyntaxError("Must indicate file to parse for indexes.")
+
+def target_design(input_file, output_file, perfect_matches, start_base, mismatches, end_base, number_targets):
+	fasta = FastaFile()
+	fasta.read_in_mirlist()
+	target_dict = fasta.return_targets()
+	f = MiRList(target_dict)
+	f.read_list()
+	f.create_file()
+
+def probedesign(input_file, output_file, perfect_matches, start_base, mismatches, end_base, number_targets):
+	
+	number_targets = number_targets - 2
+	in_file = FastaFile(input_file, output_file, perfect_matches)
+	in_file.Create_first_set()
+	in_file.read_in_targets()
+	probes = in_file.Create_first_probe_list(start_base)
+
+	for key in probes:
+		temp = in_file.Expand_probe(probes[key], mismatches, start_base, end_base)
+		length = 0
+		#print len(temp) #.keys()   
+		while len(temp) > length:
+			length = len(temp)
+			temp = in_file.Expand_probe(temp, mismatches, start_base, end_base)
+		targets, filtered = in_file.FilterOnTargets(temp, number_targets)
+		#print filtered
+		write_probes(output_file, filtered, targets, perfect_matches)
+		#print temp   Ta bort # for att skriva alla ofiltrerade sekvenser och targets till stdout
+
+def write_probes(output_file, filtered, targets, perfect_matches):
+
+	if not arg_vars['output_file']:
+		if len(targets) > 0:
+			print str(filtered.keys()[0][0:perfect_matches]) + '  ' + str(len(targets)) + '  ' +str(len(filtered.keys()))
+			for key in filtered.keys():
+				print key + '    ' + str(filtered[key])   ### Ta bort # for att skriva alla sekvenser och deras target till stdout
 		
-	def inHandle(self):
-		return self.inHandle
-
+	elif arg_vars['output_file']:
+		if len(targets) > 0:
+			print str(filtered.keys()[0][0:perfect_matches]) + '  ' + str(len(targets)) + '  ' +str(len(filtered.keys()))
+			for key in filtered.keys():
+				print key + '    ' + str(filtered[key])   ### Ta bort # for att skriva alla sekvenser och deras target till stdout
+	
 
 class FastaFile:
-	def __init__(self):
-		self.args = Arguments()
+	def __init__(self, input_file, output_file, perfect_matches):
+		self.in_handle = input_file
+		self.out_handle = output_file
 		self.bases = ['A', 'T', 'C', 'G']
-		self.seed_length = 2 ### Andra for att fa langre perfekt match i borjan
+		self.seed_length = perfect_matches ### Andra for att fa langre perfekt match i borjan
 		self.seed_list = []
 		self.targets = {}
 		self.probes = {}
@@ -42,14 +87,14 @@ class FastaFile:
 		return self.targets
 	
 	def read_in_mirlist(self):
-		self.__in_handle = open(self.args.in_handle, "rU")
+		self.__in_handle = open(self.in_handle, "rU")
 		for rec in SeqIO.parse(self.__in_handle, "fasta"):
 			if rec.seq not in self.targets:
 				self.targets[rec.id] = rec
 		self.__in_handle.close()
 		
 	def read_in_targets(self):
-		self.__in_handle = open(self.args.in_handle, "rU")
+		self.__in_handle = open(self.in_handle, "rU")
 		for rec in SeqIO.parse(self.__in_handle, "fasta"):
 			if rec.seq not in self.targets:
 				self.targets[rec.seq.back_transcribe()] = rec.id
@@ -73,15 +118,15 @@ class FastaFile:
 				self.seed_list = __templist
 	
 	
-	def Create_first_probe_list(self):
+	def Create_first_probe_list(self, start_base):
 		for seed in self.seed_list:
 			temp_dict = {}
 			for rec in self.targets:
-				if str(rec[0:self.seed_length]) == seed:
+				if str(rec[start_base:(start_base+self.seed_length)]) == seed:
 					if str(rec) not in temp_dict.keys():
-						temp_dict[str(rec)] = [self.targets[rec]]
+						temp_dict[str(rec)[start_base:]] = [self.targets[rec]]
 					else:
-						temp_dict[str(rec)] = temp_dict[str(rec)] + [self.targets[rec]]
+						temp_dict[str(rec)[start_base:]] = temp_dict[str(rec)] + [self.targets[rec]]
 			self.probes[seed] = temp_dict
 		return self.probes
 	
@@ -94,10 +139,10 @@ class FastaFile:
 			else:
 				list.append(str(kyey))
 	
-	def Expand_probe(self, probe_set):
+	def Expand_probe(self, probe_set, mismatches, start_base, end_base):
 		iter = 0
 		temp_dict = {}
-		end = 17 ### Andra for att fa langre eller kortare region
+		end = end_base - start_base ### Andra for att fa langre eller kortare region 16
 		while iter < len(probe_set):
 			keylist = list(probe_set.keys())
 			startkey = keylist[iter]
@@ -111,7 +156,7 @@ class FastaFile:
 					else:
 						temp_seq = temp_seq + 'N'
 				temp_Seq = Seq(temp_seq, generic_dna)
-				if temp_Seq.count('N') < 8: ### Andra for att tillata fler eller farre N i regionen
+				if temp_Seq.count('N') < (mismatches+1): ### Andra for att tillata fler eller farre N i regionen
 					if temp_seq not in temp_dict.keys():
 						temp_set = set(probe_set[startkey] + probe_set[rec])
 						temp_dict[temp_seq] = list(temp_set)
@@ -132,10 +177,10 @@ class FastaFile:
 		return temp_dict
 			
 	
-	def FilterOnTargets(self, probeset):
+	def FilterOnTargets(self, probeset, number_targets):
 		targets = []
 		filtered = {}
-		endpos = -1  ###Andra for att krava fler miR per prob -1 = minst ett miR per prob, 0 = minst tva miR per prob osv.
+		endpos = number_targets  ###Andra for att krava fler miR per prob -1 = minst ett miR per prob, 0 = minst tva miR per prob osv.
 		iter = 15
 		while iter > endpos:
 			for probe in probeset.keys():
@@ -148,10 +193,12 @@ class FastaFile:
 					if found == False:
 						filtered[probe] = probeset[probe]
 			iter = iter - 1
-		if len(targets) > 0:
-			print str(filtered.keys()[0][0:self.seed_length]) + '  ' + str(len(targets)) + '  ' +str(len(filtered.keys()))
-			for key in filtered.keys():
-				print key + '    ' + str(filtered[key])   ### Ta bort # for att skriva alla sekvenser och deras target till stdout
+		return targets, filtered
+		#if len(targets) > 0:
+		#	print str(filtered.keys()[0][0:self.seed_length]) + '  ' + str(len(targets)) + '  ' +str(len(filtered.keys()))
+		#	for key in filtered.keys():
+		#		print key + '    ' + str(filtered[key])   ### Ta bort # for att skriva alla sekvenser och deras target till stdout
+		
 
 	def FilterOnNrOfNs(self, probeset):
 		targets = []
@@ -198,40 +245,37 @@ class MiRList:
 				sequence.id = mir
 				SeqIO.write(sequence, self.out_handle, 'fasta')
 
-		
 
-class __main__:
-	def __init__(self):
-		#self.test = sys.argv[1]
-		#self.in_handle = open(sys.argv[1], "rU")
-		#self.out_handle = open(sys.argv[2], "w")
-		return 'main'
+if __name__ == "__main__":
+	parser = argparse.ArgumentParser()
 
-	if sys.argv[1] == 'probes':
-		file = FastaFile()
-		file.Create_first_set()
-		file.read_in_targets()
-		probes = file.Create_first_probe_list()		
-		for key in probes:
-			temp = file.Expand_probe(probes[key])
-			length = 0
-			#print len(temp) #.keys()   
-			while len(temp) > length:
-				length = len(temp)
-				temp = file.Expand_probe(temp)
-			file.FilterOnTargets(temp)
-			#print temp   Ta bort # for att skriva alla ofiltrerade sekvenser och targets till stdout
-
-	if sys.argv[1] == 'targets':
-		fasta = FastaFile()
-		fasta.read_in_mirlist()
-		target_dict = fasta.return_targets()
-		f = MiRList(target_dict)
-		f.read_list()
-		f.create_file()
+	parser.add_argument("-i", "--input-file",
+								help = "Alignment file in SAM format with molecular barcode as last column. Required")
 	
+	parser.add_argument("-o", "--output-file",
+								help = "Output file for duplication marked reads. Required.")
+	
+	parser.add_argument("-s", "--start-base", type = int, 
+								help = "Left most position for probe on target. Required.")
+	
+	parser.add_argument("-p", "--perfect-matches", type = int, 
+								help = "Number of perfect matches at beginning of target. Required.")
+	
+	parser.add_argument("-m", "--mismatches", type = int, 
+								help = "Number of perfect matches at beginning of target. Required.")
 
-#move_barcode(in_handle, out_handle)
+	parser.add_argument("-e", "--end-base", type = int, 
+								help = "Number of perfect matches at beginning of target. Required.")
 
-#in_handle = open(sys.argv[1], "rU")
-#out_handle = open(sys.argv[2], "w")
+	parser.add_argument("-t", "--number-targets", type = int, 
+								help = "Number of perfect matches at beginning of target. Required.")
+
+	parser.add_argument("-l", "--mode", type = bool, 
+								help = "Number of perfect matches at beginning of target. Required.")
+     
+	arg_vars = vars(parser.parse_args())
+	
+	locals().update(arg_vars)
+	main(input_file, output_file, perfect_matches, start_base, mismatches, end_base, number_targets, mode)
+
+

@@ -26,7 +26,11 @@ def main(input_file, output_file):
 		
 		# Read header and write to output file
 		if row[0][0] == '@':
-			sam_writer(output_file, 'a', row)
+			out_handle = open(output_file, 'a')
+			writer = csv.writer(out_handle, delimiter = '\t')
+			writer.writerow(row)
+			out_handle.close()
+			#sam_writer(output_file, 'a', row)
 			
 		# If same starting position as last read
 		elif row[3] == pos:
