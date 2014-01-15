@@ -6,8 +6,8 @@ Input is aligned SAM file, output is aligned SAM file.
 
 from __future__ import print_function
 
-## alphabetize -- stylistic but helpful
 import argparse
+import collections
 import csv
 import locale
 import sets
@@ -21,7 +21,7 @@ def main(input_file, output_file):
     locale.setlocale(locale.LC_ALL, 'en_US.UTF-8')
     print("Reading data from file \"{}\"...".format(input_file), end="", file=sys.stderr)
     total_data_lines        = 0
-    non_duplicate_indexes   = []
+    non_duplicate_indexes   = collections.deque()
     with open(input_file, 'rb') as in_handle:
         sam_reader = csv.reader(in_handle, delimiter = '\t')
         max_quals_dict          = {}
